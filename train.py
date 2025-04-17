@@ -18,6 +18,19 @@ from video import VideoRecorder
 from sac_ae import SacAeAgent
 
 
+'''
+python train.py \
+    --domain_name cheetah \
+    --task_name run \
+    --encoder_type pixel \
+    --decoder_type pixel \
+    --action_repeat 4 \
+    --save_video \
+    --save_tb \
+    --work_dir ./log \
+    --seed 1
+'''
+
 def parse_args():
     parser = argparse.ArgumentParser()
     # environment
@@ -140,14 +153,16 @@ def main():
         task_name=args.task_name,
         seed=args.seed,
         visualize_reward=False,
-        from_pixels=(args.encoder_type == 'pixel'),
-        height=args.image_size,
-        width=args.image_size,
-        frame_skip=args.action_repeat
+        from_pixels=(args.encoder_type == 'pixel'), # 是否是像素输入
+        height=args.image_size, # 如果是像素输入的话，图像的高度
+        width=args.image_size, # 如果是像素输入的话，图像的宽度
+        frame_skip=args.action_repeat # 动作重复次数，相当于跳帧
     )
     env.seed(args.seed)
 
     # stack several consecutive frames together
+    # 对于像素输入的情况，使用帧栈来增加时间维度
+    # 这里的帧栈是将连续的帧拼接在一起，形成一个新的观测空间
     if args.encoder_type == 'pixel':
         env = utils.FrameStack(env, k=args.frame_stack)
 
@@ -164,9 +179,13 @@ def main():
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
 
     # the dmc2gym wrapper standardizes actions
+    # 限制动作空间的每个维度的数值大小都要在[-1, 1]之间
     assert env.action_space.low.min() >= -1
     assert env.action_space.high.max() <= 1
 
+    # 使用的是重放缓冲区
+    # 连续帧存放
+    # 离散帧抽取进行训练
     replay_buffer = utils.ReplayBuffer(
         obs_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,
@@ -175,6 +194,7 @@ def main():
         device=device
     )
 
+    # 创建agent
     agent = make_agent(
         obs_shape=env.observation_space.shape,
         action_shape=env.action_space.shape,

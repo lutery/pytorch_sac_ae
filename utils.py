@@ -75,15 +75,16 @@ class ReplayBuffer(object):
         # the proprioceptive obs is stored as float32, pixels obs as uint8
         obs_dtype = np.float32 if len(obs_shape) == 1 else np.uint8
 
+        # 这边应该是存放的连续的样本数据
         self.obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
         self.next_obses = np.empty((capacity, *obs_shape), dtype=obs_dtype)
         self.actions = np.empty((capacity, *action_shape), dtype=np.float32)
         self.rewards = np.empty((capacity, 1), dtype=np.float32)
         self.not_dones = np.empty((capacity, 1), dtype=np.float32)
 
-        self.idx = 0
+        self.idx = 0 # 当前存放数据的索引
         self.last_save = 0
-        self.full = False
+        self.full = False # 是否已经存满了
 
     def add(self, obs, action, reward, next_obs, done):
         np.copyto(self.obses[self.idx], obs)
@@ -96,10 +97,13 @@ class ReplayBuffer(object):
         self.full = self.full or self.idx == 0
 
     def sample(self):
+        # 随机采样 batch_size 个数据
         idxs = np.random.randint(
             0, self.capacity if self.full else self.idx, size=self.batch_size
         )
 
+        # 注意这里返回的是tensor
+        # 此外返回的不是连续的样本帧
         obses = torch.as_tensor(self.obses[idxs], device=self.device).float()
         actions = torch.as_tensor(self.actions[idxs], device=self.device)
         rewards = torch.as_tensor(self.rewards[idxs], device=self.device)
@@ -111,8 +115,10 @@ class ReplayBuffer(object):
         return obses, actions, rewards, next_obses, not_dones
 
     def save(self, save_dir):
+        # 判断是否已经保存过了
         if self.idx == self.last_save:
             return
+        # 保存数据到文件
         path = os.path.join(save_dir, '%d_%d.pt' % (self.last_save, self.idx))
         payload = [
             self.obses[self.last_save:self.idx],
@@ -125,6 +131,7 @@ class ReplayBuffer(object):
         torch.save(payload, path)
 
     def load(self, save_dir):
+        # 加载数据
         chunks = os.listdir(save_dir)
         chucks = sorted(chunks, key=lambda x: int(x.split('_')[0]))
         for chunk in chucks:
