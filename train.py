@@ -104,6 +104,7 @@ def evaluate(env, agent, video, num_episodes, L, step):
             episode_reward += reward
 
         video.save('%d.mp4' % step)
+        # 打印验证模型的平均奖励回报
         L.log('eval/episode_reward', episode_reward, step)
     L.dump(step)
 
@@ -202,57 +203,79 @@ def main():
         device=device
     )
 
+    # 日志记录器
     L = Logger(args.work_dir, use_tb=args.save_tb)
-
+    
+    # episode: 经历了了多少个游戏周期
+    # episode_reward: 记录的是一次游戏周期内的总奖励
+    # done: 是否结束
     episode, episode_reward, done = 0, 0, True
     start_time = time.time()
+    # 限制了总训练的步数
     for step in range(args.num_train_steps):
         if done:
+            # 如果游戏结束则进行验证
             if step > 0:
+                # 打印训练的时间以及经过的步数
                 L.log('train/duration', time.time() - start_time, step)
                 start_time = time.time()
+                # todo 后续查看这个的功能
                 L.dump(step)
 
             # evaluate agent periodically
             if step % args.eval_freq == 0:
+                # 指定的评估频率
+                # 打印评估时的步数
                 L.log('eval/episode', episode, step)
                 evaluate(env, agent, video, args.num_eval_episodes, L, step)
+                # 评估后保存模型
                 if args.save_model:
                     agent.save(model_dir, step)
+                # 可以选择是否保存重放缓冲区，默认不保存
                 if args.save_buffer:
                     replay_buffer.save(buffer_dir)
 
             L.log('train/episode_reward', episode_reward, step)
 
+            # 游戏结束，重置环境
             obs = env.reset()
             done = False
             episode_reward = 0
-            episode_step = 0
+            episode_step = 0 # 游戏周期内经过的步数
             episode += 1
 
             L.log('train/episode', episode, step)
 
         # sample action for data collection
         if step < args.init_steps:
+            # 一开始预热时使用随机采样的动作
             action = env.action_space.sample()
         else:
+            # 进入设置为验证模式，退出设置为验证模式
             with utils.eval_mode(agent):
+                # 随机动作采样
                 action = agent.sample_action(obs)
 
         # run training update
         if step >= args.init_steps:
+            # 如果步数大于预热步数，则进行训练
+            # 第一次训练则训练init_steps次，是为了智能体快速利用这些数据进行初步学习
+            # 后续每次采样动作后训练一次
             num_updates = args.init_steps if step == args.init_steps else 1
             for _ in range(num_updates):
                 agent.update(replay_buffer, L, step)
 
+        # 对预测的动作进行执行
         next_obs, reward, done, _ = env.step(action)
 
         # allow infinit bootstrap
+        # 限制游戏周期内的步数
         done_bool = 0 if episode_step + 1 == env._max_episode_steps else float(
             done
         )
         episode_reward += reward
 
+        # 将采集的步数存入重放缓冲区
         replay_buffer.add(obs, action, reward, next_obs, done_bool)
 
         obs = next_obs
