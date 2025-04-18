@@ -51,8 +51,20 @@ class Actor(nn.Module):
         self, obs_shape, action_shape, hidden_dim, encoder_type,
         encoder_feature_dim, log_std_min, log_std_max, num_layers, num_filters
     ):
+        '''
+        obs_shape: 观测空间的形状 (例如图像的宽、高、通道数)。
+        action_shape: 动作空间的形状 (例如动作的维度)。
+        hidden_dim: 隐藏层的维度，用于 Actor 网络。
+        encoder_type: 编码器的类型 (例如 'pixel' 表示像素输入)。
+        encoder_feature_dim: 编码器输出的特征维度。
+        log_std_min: Actor 网络中 log_std 的最小值，用于限制动作的标准差。
+        log_std_max: Actor 网络中 log_std 的最大值，用于限制动作的标准差。
+        num_layers: 编码器和解码器的卷积层数。
+        num_filters: 编码器和解码器的卷积核数量。
+        '''
         super().__init__()
 
+        # 构建环境编码器
         self.encoder = make_encoder(
             encoder_type, obs_shape, encoder_feature_dim, num_layers,
             num_filters
@@ -116,10 +128,11 @@ class Actor(nn.Module):
 
 
 class QFunction(nn.Module):
-    """MLP for q-function."""
+    """MLP for q-function. q值预测"""
     def __init__(self, obs_dim, action_dim, hidden_dim):
         super().__init__()
 
+        # 结合观测和动作的特征，得到 q 值
         self.trunk = nn.Sequential(
             nn.Linear(obs_dim + action_dim, hidden_dim), nn.ReLU(),
             nn.Linear(hidden_dim, hidden_dim), nn.ReLU(),
@@ -139,6 +152,15 @@ class Critic(nn.Module):
         self, obs_shape, action_shape, hidden_dim, encoder_type,
         encoder_feature_dim, num_layers, num_filters
     ):
+        '''
+        obs_shape: 观测空间的形状 (例如图像的宽、高、通道数)。
+        action_shape: 动作空间的形状 (例如动作的维度)。
+        hidden_dim: 隐藏层的维度，用于 Critic 网络。
+        encoder_type: 编码器的类型 (例如 'pixel' 表示像素输入)。
+        encoder_feature_dim: 编码器输出的特征维度。
+        num_layers: 编码器和解码器的卷积层数。
+        num_filters: 编码器和解码器的卷积核数量。
+        '''
         super().__init__()
 
 
@@ -147,6 +169,7 @@ class Critic(nn.Module):
             num_filters
         )
 
+        # 预测两个Q值
         self.Q1 = QFunction(
             self.encoder.feature_dim, action_shape[0], hidden_dim
         )
@@ -187,37 +210,37 @@ class SacAeAgent(object):
     """SAC+AE algorithm."""
     def __init__(
         self,
-        obs_shape,
-        action_shape,
-        device,
-        hidden_dim=256,
-        discount=0.99,
-        init_temperature=0.01,
-        alpha_lr=1e-3,
-        alpha_beta=0.9,
-        actor_lr=1e-3,
-        actor_beta=0.9,
-        actor_log_std_min=-10,
-        actor_log_std_max=2,
-        actor_update_freq=2,
-        critic_lr=1e-3,
-        critic_beta=0.9,
-        critic_tau=0.005,
-        critic_target_update_freq=2,
-        encoder_type='pixel',
-        encoder_feature_dim=50,
-        encoder_lr=1e-3,
-        encoder_tau=0.005,
-        decoder_type='pixel',
-        decoder_lr=1e-3,
-        decoder_update_freq=1,
-        decoder_latent_lambda=0.0,
-        decoder_weight_lambda=0.0,
-        num_layers=4,
-        num_filters=32
+        obs_shape,  # 观测空间的形状 (例如图像的宽、高、通道数)。
+        action_shape,  # 动作空间的形状 (例如动作的维度)。
+        device,  # 设备 (CPU 或 GPU)，用于模型和张量的计算。
+        hidden_dim=256,  # 隐藏层的维度，用于 Actor 和 Critic 网络。
+        discount=0.99,  # 折扣因子 γ，用于计算未来奖励的折现值。
+        init_temperature=0.01,  # 初始温度参数 α，用于平衡探索和利用。
+        alpha_lr=1e-3,  # 温度参数 α 的学习率。
+        alpha_beta=0.9,  # 温度参数优化器的动量超参数 β。
+        actor_lr=1e-3,  # Actor 网络的学习率。
+        actor_beta=0.9,  # Actor 网络优化器的动量超参数 β。
+        actor_log_std_min=-10,  # Actor 网络中 log_std 的最小值，用于限制动作的标准差。
+        actor_log_std_max=2,  # Actor 网络中 log_std 的最大值，用于限制动作的标准差。
+        actor_update_freq=2,  # Actor 网络更新的频率 (每隔多少步更新一次)。
+        critic_lr=1e-3,  # Critic 网络的学习率。
+        critic_beta=0.9,  # Critic 网络优化器的动量超参数 β。
+        critic_tau=0.005,  # 软更新参数 τ，用于更新目标 Critic 网络。
+        critic_target_update_freq=2,  # Critic 目标网络更新的频率。
+        encoder_type='pixel',  # 编码器的类型 (例如 'pixel' 表示像素输入)。
+        encoder_feature_dim=50,  # 编码器输出的特征维度。
+        encoder_lr=1e-3,  # 编码器的学习率。
+        encoder_tau=0.005,  # 编码器的软更新参数 τ。
+        decoder_type='pixel',  # 解码器的类型 (例如 'pixel' 表示像素输入)。
+        decoder_lr=1e-3,  # 解码器的学习率。
+        decoder_update_freq=1,  # 解码器更新的频率。
+        decoder_latent_lambda=0.0,  # 解码器的潜在空间正则化系数。
+        decoder_weight_lambda=0.0,  # 解码器权重衰减系数。
+        num_layers=4,  # 编码器和解码器的卷积层数。
+        num_filters=32  # 编码器和解码器的卷积核数量。
     ):
         self.device = device
-        self.discount = discount
+        self.discount = discount # 折扣，todo应该是用于q值计算
         self.critic_tau = critic_tau
         self.encoder_tau = encoder_tau
         self.actor_update_freq = actor_update_freq
@@ -225,6 +248,7 @@ class SacAeAgent(object):
         self.decoder_update_freq = decoder_update_freq
         self.decoder_latent_lambda = decoder_latent_lambda
 
+        # sac算法的动作模型，评价模型，评价目标模型
         self.actor = Actor(
             obs_shape, action_shape, hidden_dim, encoder_type,
             encoder_feature_dim, actor_log_std_min, actor_log_std_max,
@@ -241,30 +265,38 @@ class SacAeAgent(object):
             encoder_feature_dim, num_layers, num_filters
         ).to(device)
 
+        # 将评价模型的参数复制到目标模型中，可以采用TargetNet
         self.critic_target.load_state_dict(self.critic.state_dict())
 
+        # 同步评价模型的环境特征提取器的参数到动作模型中
         # tie encoders between actor and critic
         self.actor.encoder.copy_conv_weights_from(self.critic.encoder)
 
+        # todo 
         self.log_alpha = torch.tensor(np.log(init_temperature)).to(device)
         self.log_alpha.requires_grad = True
         # set target entropy to -|A|
+        # todo 这个熵的计算数学公式是什么
         self.target_entropy = -np.prod(action_shape)
 
+        # 这里应该就是ae的了，解码器？todo
         self.decoder = None
         if decoder_type != 'identity':
             # create decoder
+            # 构建环境解码层
             self.decoder = make_decoder(
                 decoder_type, obs_shape, encoder_feature_dim, num_layers,
                 num_filters
             ).to(device)
             self.decoder.apply(weight_init)
 
+            # todo 单独构建评价模型的环境编码器的优化器
             # optimizer for critic encoder for reconstruction loss
             self.encoder_optimizer = torch.optim.Adam(
                 self.critic.encoder.parameters(), lr=encoder_lr
             )
 
+            # 单独构建环境特征解码器的优化器
             # optimizer for decoder
             self.decoder_optimizer = torch.optim.Adam(
                 self.decoder.parameters(),
@@ -273,22 +305,30 @@ class SacAeAgent(object):
             )
 
         # optimizers
+        # 优化器
+        # 整个动作模型的参数优化器（包含编码器）
         self.actor_optimizer = torch.optim.Adam(
             self.actor.parameters(), lr=actor_lr, betas=(actor_beta, 0.999)
         )
 
+        # 整个评价模型的参数优化器（包含编码器）
         self.critic_optimizer = torch.optim.Adam(
             self.critic.parameters(), lr=critic_lr, betas=(critic_beta, 0.999)
         )
 
+        # 构建log_alpha的优化器
         self.log_alpha_optimizer = torch.optim.Adam(
             [self.log_alpha], lr=alpha_lr, betas=(alpha_beta, 0.999)
         )
 
+        # 切换训练模型
         self.train()
         self.critic_target.train()
 
     def train(self, training=True):
+        '''
+        设置是否处于训练模式，包含动作模型、评价模型、环境特征解码器，仅限像素特征
+        '''
         self.training = training
         self.actor.train(training)
         self.critic.train(training)

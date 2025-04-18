@@ -12,7 +12,7 @@ OUT_DIM = {2: 39, 4: 35, 6: 31}
 
 
 class PixelEncoder(nn.Module):
-    """Convolutional encoder of pixels observations."""
+    """Convolutional encoder of pixels observations.像素环境特征提取"""
     def __init__(self, obs_shape, feature_dim, num_layers=2, num_filters=32):
         super().__init__()
 
@@ -21,12 +21,15 @@ class PixelEncoder(nn.Module):
         self.feature_dim = feature_dim
         self.num_layers = num_layers
 
+        # 卷积层，激活函数在forward中采用Relu
         self.convs = nn.ModuleList(
             [nn.Conv2d(obs_shape[0], num_filters, 3, stride=2)]
         )
         for i in range(num_layers - 1):
             self.convs.append(nn.Conv2d(num_filters, num_filters, 3, stride=1))
 
+        # 全连接层，激活函数在forward中采用tanh
+        # 采用LayerNorm归一化
         out_dim = OUT_DIM[num_layers]
         self.fc = nn.Linear(num_filters * out_dim * out_dim, self.feature_dim)
         self.ln = nn.LayerNorm(self.feature_dim)
@@ -91,6 +94,9 @@ class PixelEncoder(nn.Module):
 
 
 class IdentityEncoder(nn.Module):
+    '''
+    啥都不做
+    '''
     def __init__(self, obs_shape, feature_dim, num_layers, num_filters):
         super().__init__()
 

@@ -5,6 +5,9 @@ from encoder import OUT_DIM
 
 
 class PixelDecoder(nn.Module):
+    '''
+    像素环境解码器
+    '''
     def __init__(self, obs_shape, feature_dim, num_layers=2, num_filters=32):
         super().__init__()
 
@@ -12,12 +15,14 @@ class PixelDecoder(nn.Module):
         self.num_filters = num_filters
         self.out_dim = OUT_DIM[num_layers]
 
+        # 特征转码层
         self.fc = nn.Linear(
             feature_dim, num_filters * self.out_dim * self.out_dim
         )
 
         self.deconvs = nn.ModuleList()
 
+        # 反卷积层，最后输出的是三通道，可能要注意，如果你是灰度图就是单通道
         for i in range(self.num_layers - 1):
             self.deconvs.append(
                 nn.ConvTranspose2d(num_filters, num_filters, 3, stride=1)
